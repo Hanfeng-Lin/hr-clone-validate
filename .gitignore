@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# SnapGene lock files
+.sglock/
+
+# Local test data (uncomment to keep .dna files out of the repo)
+# *.dna
