@@ -37,6 +37,25 @@ pip install -r requirements.txt
 
 ---
 
+## Install as an agent skill (Claude Code / Codex)
+
+This repo is a valid [Agent Skill](https://agentskills.io): `SKILL.md` sits at the
+repo root. Clone it into your skills directory:
+
+```bash
+# Claude Code
+git clone https://github.com/Hanfeng-Lin/hr-clone-validate ~/.claude/skills/hr-clone-validate
+# Codex
+git clone https://github.com/Hanfeng-Lin/hr-clone-validate ~/.codex/skills/hr-clone-validate
+
+pip install -r ~/.claude/skills/hr-clone-validate/requirements.txt   # or the ~/.codex path
+```
+
+Restart the agent; the skill is then picked up automatically (or invoke it as
+`/hr-clone-validate` in Claude Code).
+
+---
+
 ## Quick start
 
 ```bash

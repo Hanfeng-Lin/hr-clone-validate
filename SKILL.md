@@ -45,6 +45,12 @@ Invoke this skill when the user asks to:
 
 ## How to run
 
+The script ships next to this `SKILL.md`. Run it by its full path inside the
+skill directory (e.g. `~/.claude/skills/hr-clone-validate/hr_clone_validate.py`
+or `~/.codex/skills/hr-clone-validate/hr_clone_validate.py`) while staying in the
+user's working directory, so relative `.dna` paths resolve. Below,
+`hr_clone_validate.py` stands for that full path.
+
 Assembly (each `--fragment` = `LABEL[@template.dna] FWD=SEQ REV=SEQ`):
 
 ```bash
