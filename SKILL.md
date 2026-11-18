@@ -74,9 +74,11 @@ python hr_clone_validate.py            # 3-fragment assembly demo (one .dna)
 python hr_clone_validate.py --demo-mut # deletion mutagenesis demo (one .dna)
 ```
 
-Options: `--min-arm N` (default 15, minimum overlap per junction),
-`--seed N` (default 15, 3′-anchor seed for in-silico PCR). Exit code `0` =
-valid circular product found, `1` = not.
+Options: `--min-arm N` / `--max-arm N` (defaults 15 / 20 — the ClonExpress
+design window for homology per junction), `--seed N` (default 15, 3′-anchor
+seed for in-silico PCR). Exit code `0` = valid circular product found, `1` =
+not. An over-spec arm is reported as a warning, not a failure, so it does not
+change the exit code — read the junction table.
 
 ## Interpreting the output
 
@@ -89,7 +91,8 @@ valid circular product found, `1` = not.
    (`as-given` / `revcomp`), every junction's HR-arm length + sequence, and the
    assembled circular size (compared to the template when all fragments share one
    circular template). On failure it prints the best overlap per junction so you
-   can see which arm is too short.
+   can see which arm is too short. An arm longer than `--max-arm` is tagged
+   `<<< OVER SPEC` with a warning block.
 
 ## Guidance for the agent
 
@@ -102,7 +105,18 @@ valid circular product found, `1` = not.
   template, and suggest checking the template choice or the 3′ binding region.
 - If recombination is NO, point to the junction whose overlap is below
   `--min-arm` and suggest lengthening that primer's 5′ HR arm to ~15–20 bp.
-- Vazyme ClonExpress recommends ~15–20 bp homology per junction; `--min-arm 15`
-  is the default floor, raise it for a stricter check.
+- **The arm window is 15–20 bp, both ends.** The ClonExpress manual specifies
+  15–20 bp of homology per junction, so 15 is a floor *and* 20 is a ceiling.
+  Do not go over 20 bp to fix a weak junction. If an arm's Tm is too low, **move
+  the junction** to a better-balanced stretch of sequence — the arm's position
+  is free, its length is not. Report an `OVER SPEC` warning to the user rather
+  than quietly accepting it.
+- **Check each arm's Tm against the reaction temperature, not just its length.**
+  ClonExpress Ultra One Step V2 (C115/C116) runs at **50 °C** for 5–30 min;
+  older ClonExpress II (C112, Exnase II) runs at 37 °C. A 20 bp arm at 40 % GC
+  has a Tm near 48 °C — below a 50 °C reaction. Ask which kit is in use, compute
+  each arm's Tm, and aim for a comfortable margin over the reaction temperature.
+  V2's 2 × CE Mix is explicitly more tolerant of arm GC content than earlier
+  kits, so GC-rich arms are less of a concern there than low-Tm ones.
 - This is a sequence-level prediction only — no PCR efficiency, primer-dimer, or
   secondary-structure modelling.

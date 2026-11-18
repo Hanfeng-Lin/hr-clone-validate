@@ -236,7 +236,17 @@ def longest_suffix_prefix(a, b, max_len=80):
     return 0
 
 
-def assemble_circular(frags, min_arm=15):
+# --- Vazyme ClonExpress design window for homology arms -------------------
+# The kit manual specifies 15-20 bp of homology per junction. ARM_MAX is a
+# design limit, not a thermodynamic one: a longer arm still recombines, but it
+# is outside the kit's validated range, so the report flags it loudly instead
+# of passing it silently. Fix an over-spec arm by shortening the primer 5' tail
+# or moving the junction -- never by just leaving it long.
+ARM_MIN = 15
+ARM_MAX = 20
+
+
+def assemble_circular(frags, min_arm=ARM_MIN):
     """
     Find a circular HR assembly of N fragments (N >= 2).
 
@@ -426,7 +436,7 @@ def recommend_ta(tm_f, tm_r):
 # --------------------------------------------------------------------------- #
 # reporting
 # --------------------------------------------------------------------------- #
-def run(specs, min_arm=15, seed_len=15):
+def run(specs, min_arm=ARM_MIN, seed_len=15, max_arm=ARM_MAX):
     """
     specs : list of fragment dicts, one per fragment / per template:
             {'label': str,
@@ -474,7 +484,8 @@ def run(specs, min_arm=15, seed_len=15):
     print("  (Ta = lower whole-primer Tm of the pair - 5 C, clamped to 50-72 C.)")
 
     print("\n" + "=" * 74)
-    print(f"  RECOMBINATION  (Vazyme ClonExpress; need >= {min_arm} bp per junction)")
+    print(f"  RECOMBINATION  (Vazyme ClonExpress; arms must be "
+          f"{min_arm}-{max_arm} bp per junction)")
     print("=" * 74)
     res = assemble_circular(
         [{"name": f["label"], "amplicon": f["amplicon"]} for f in frags], min_arm)
@@ -494,11 +505,26 @@ def run(specs, min_arm=15, seed_len=15):
     print("  Orientations   : "
           + ", ".join(f"{k}={v}" for k, v in res["orientations"].items()))
     print("\n  Junctions (HR arms):")
+    over = []
     for i, j in enumerate(res["junctions"], 1):
         fo = "" if j["from_ori"] == 0 else "(rc)"
         to = "" if j["to_ori"] == 0 else "(rc)"
+        if j["len"] > max_arm:
+            over.append(i)
+            flag = f"   <<< OVER SPEC (> {max_arm} bp)"
+        else:
+            flag = ""
         print(f"    J{i}: {j['from']}{fo} 3' -> {j['to']}{to} 5'   "
-              f"{j['len']} bp   {j['seq']}")
+              f"{j['len']} bp   {j['seq']}{flag}")
+
+    if over:
+        js = ", ".join(f"J{i}" for i in over)
+        print(f"\n  WARNING: {js} exceed the {min_arm}-{max_arm} bp ClonExpress "
+              "design window.")
+        print("  Shorten the 5' tail of the primer that writes that arm, or move "
+              "the junction to a")
+        print("  better-balanced stretch of sequence. Do not leave an arm long "
+              "just to raise its Tm.")
 
     print(f"\n  Assembled circular product: {res['circle_len']} bp")
     # reference: if every fragment came from one circular template, compare to it
@@ -511,7 +537,8 @@ def run(specs, min_arm=15, seed_len=15):
     return True
 
 
-def run_mutagenesis(template, tpl_name, pair, min_arm=15, seed_len=15):
+def run_mutagenesis(template, tpl_name, pair, min_arm=ARM_MIN, seed_len=15,
+                    max_arm=ARM_MAX):
     """Report a one-template, one-primer-pair self-HR mutagenesis."""
     fwd, rev = pair
     seq, circ = template
@@ -539,7 +566,8 @@ def run_mutagenesis(template, tpl_name, pair, min_arm=15, seed_len=15):
           f"(lower whole-primer Tm - 5 C)")
 
     print("\n" + "-" * 74)
-    print(f"  Self-circularisation (need >= {min_arm} bp end overlap):")
+    print(f"  Self-circularisation (end overlap must be "
+          f"{min_arm}-{max_arm} bp):")
     if not out["ok"]:
         print(f"  RESULT: NO  -- the product's ends overlap only {out['arm_len']} bp; "
               "primers' 5' arms do not match. No self-HR.")
@@ -548,6 +576,10 @@ def run_mutagenesis(template, tpl_name, pair, min_arm=15, seed_len=15):
     print(f"  RESULT: YES -- product self-circularises via a "
           f"{out['arm_len']} bp HR arm")
     print(f"    HR arm = {out['arm_seq']}")
+    if out["arm_len"] > max_arm:
+        print(f"  WARNING: the arm is {out['arm_len']} bp, over the "
+              f"{min_arm}-{max_arm} bp ClonExpress design window.")
+        print("  Trim the overlapping 5' tails of the two divergent primers.")
     print(f"  Circular product: {out['circle_len']} bp "
           f"(template {len(seq)} bp; delta = {out['circle_len'] - len(seq):+d} bp)")
 
@@ -647,8 +679,13 @@ def main(argv=None):
                          "FWD=SEQ REV=SEQ (divergent / around-the-horn)")
     ap.add_argument("--demo-mut", action="store_true",
                     help="run the built-in self-HR mutagenesis demo (one .dna)")
-    ap.add_argument("--min-arm", type=int, default=15,
-                    help="minimum HR-arm length per junction (default 15)")
+    ap.add_argument("--min-arm", type=int, default=ARM_MIN,
+                    help=f"minimum HR-arm length per junction "
+                         f"(default {ARM_MIN}, per the ClonExpress manual)")
+    ap.add_argument("--max-arm", type=int, default=ARM_MAX,
+                    help=f"maximum HR-arm length per junction before the report "
+                         f"flags it as over spec (default {ARM_MAX}, per the "
+                         f"ClonExpress manual)")
     ap.add_argument("--seed", type=int, default=15,
                     help="3'-anchor seed length for in-silico PCR (default 15)")
     args = ap.parse_args(argv)
@@ -658,7 +695,8 @@ def main(argv=None):
         print("(--demo-mut -> built-in self-HR deletion mutagenesis on one .dna: "
               f"{DEMO_TEMPLATE}, deleting bp 2000..2030)\n")
         tpl, name, pair, _ = build_mut_demo(DEMO_TEMPLATE)
-        ok = run_mutagenesis(tpl, name, pair, min_arm=args.min_arm, seed_len=args.seed)
+        ok = run_mutagenesis(tpl, name, pair, min_arm=args.min_arm,
+                             seed_len=args.seed, max_arm=args.max_arm)
         return 0 if ok else 1
     if args.mutagenesis:
         if not args.template:
@@ -666,7 +704,8 @@ def main(argv=None):
         tpl = load_template(args.template)
         pair = (_parse_named(args.mutagenesis[0]), _parse_named(args.mutagenesis[1]))
         ok = run_mutagenesis(tpl, args.template, pair,
-                             min_arm=args.min_arm, seed_len=args.seed)
+                             min_arm=args.min_arm, seed_len=args.seed,
+                             max_arm=args.max_arm)
         return 0 if ok else 1
 
     # --- assembly mode: N fragments / N templates ---
@@ -684,7 +723,8 @@ def main(argv=None):
             specs.append({"label": r["label"], "tpl": cache[r["tpl_path"]],
                           "tpl_name": r["tpl_path"], "fwd": r["fwd"], "rev": r["rev"]})
 
-    ok = run(specs, min_arm=args.min_arm, seed_len=args.seed)
+    ok = run(specs, min_arm=args.min_arm, seed_len=args.seed,
+             max_arm=args.max_arm)
     return 0 if ok else 1
 
 
